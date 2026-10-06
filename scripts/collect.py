@@ -304,5 +304,17 @@ def main():
             f.write(f"\n토큰: 입력 {usage['input_tokens']:,} / 출력 {usage['output_tokens']:,}\n")
 
 
+def fail_summary(msg):
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+            f.write(f"## 여론조사 수집 실패 {TODAY}\n\n```\n{msg}\n```\n")
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit as e:
+        if e.code not in (None, 0):
+            print(f"::error title=수집 실패::{str(e.code)[:300]}")
+            fail_summary(str(e.code))
+        raise
