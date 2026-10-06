@@ -1,0 +1,92 @@
+name: 여론조사 갱신
+
+on:
+  schedule:
+    - cron: "10 4 * * *"      # 매일 13:10 KST
+  workflow_dispatch:
+    inputs:
+      collect:
+        description: "새 조사 자동 수집(Claude API) 실행"
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    paths: ["data/polls.csv", "build.py", "scripts/**", ".github/workflows/update.yml"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: poll-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Seoul
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Pretendard 글꼴
+        run: |
+          for w in Regular SemiBold Bold ExtraBold; do
+            curl -sSfL -o P-$w.otf "https://raw.githubusercontent.com/orioncactus/pretendard/main/packages/pretendard/dist/public/static/Pretendard-$w.otf"
+          done
+
+      - name: 새 조사 수집
+        id: collect
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.collect)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
+        run: python scripts/collect.py data/polls.csv
+
+      - name: 페이지 빌드·점검
+        run: |
+          mkdir -p site/data
+          python build.py data/polls.csv site/index.html
+          python scripts/check_html.py site/index.html
+          cp data/polls.csv site/data/polls.csv
+          touch site/.nojekyll
+
+      - name: 수집 결과 커밋
+        if: steps.collect.outputs.changed == 'true'
+        run: |
+          git config user.name "poll-bot"
+          git config user.email "poll-bot@users.noreply.github.com"
+          git add data/polls.csv
+          git commit -m "여론조사 자동 갱신: 신규 ${{ steps.collect.outputs.added }}건 ($(date +%F))"
+          git push
+
+      - name: 수집 로그 보관
+        if: always() && steps.collect.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: collect-log
+          path: collect_log.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
