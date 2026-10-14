@@ -10,13 +10,14 @@
 - 중앙선거여론조사심의위원회(nesdc.go.kr)는 접근하지 않는다.
 
 실행: python scripts/collect.py data/polls.csv
-환경변수: ANTHROPIC_API_KEY(필수), CLAUDE_MODEL(기본 claude-sonnet-5-5)
+환경변수: ANTHROPIC_API_KEY(필수), ANTHROPIC_WORKSPACE_ID(작업공간 지정이 없는 조직 키일 때 필수), CLAUDE_MODEL(기본 claude-sonnet-5-5)
 """
 import csv, json, os, re, sys, time, datetime as dt, urllib.request, urllib.error
 
 CSV_PATH = sys.argv[1] if len(sys.argv) > 1 else "data/polls.csv"
 MODEL = os.environ.get("CLAUDE_MODEL") or "claude-sonnet-5-5"
 API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+WORKSPACE_ID = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
 KST = dt.timezone(dt.timedelta(hours=9))
 TODAY = dt.datetime.now(KST).date()
 
@@ -50,8 +51,10 @@ def key(r):
 def call(messages, system, tools):
     body = json.dumps({"model": MODEL, "max_tokens": 16000, "system": system,
                        "messages": messages, "tools": tools}).encode()
-    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
-        "x-api-key": API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"})
+    headers = {"x-api-key": API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+    if WORKSPACE_ID:  # 작업공간 지정이 없는 조직 키는 이 헤더가 있어야 호출됨
+        headers["anthropic-workspace-id"] = WORKSPACE_ID
+    req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers=headers)
     for attempt in range(4):
         try:
             with urllib.request.urlopen(req, timeout=600) as r:

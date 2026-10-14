@@ -29,5 +29,6 @@
 ## 설정
 
 - Secrets `ANTHROPIC_API_KEY` (필수)
+- Secrets `ANTHROPIC_WORKSPACE_ID` (키가 특정 작업공간에 묶여 있지 않으면 필수, Claude Console > Workspaces에서 확인)
 - Variables `CLAUDE_MODEL` (선택, 기본 `claude-sonnet-5-5`)
 - Settings > Pages > Source: GitHub Actions
