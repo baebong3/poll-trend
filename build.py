@@ -493,12 +493,23 @@ poll_rows = []
 for _, r in df.sort_values(["field_end", "org"], ascending=[False, True]).iterrows():
     link = f"<a href='{esc(r['source_url'])}' target='_blank' rel='noopener'>보도</a>" if isinstance(r["source_url"], str) else ""
     poll_rows.append(
-        f"<tr><td class='num'>{sdate(r['field_start'])}~{sdate(r['field_end'])}</td><td class='lab'>{esc(r['org'])}</td>"
+        f"<tr><td class='num dt'>{sdate(r['field_start'])}~<wbr>{sdate(r['field_end'])}</td><td class='lab'>{esc(r['org'])}</td>"
         f"<td class='hm lab'>{esc(r['sp_short'])}</td><td>{'전화' if r['method']=='전화면접' else 'ARS'}</td>"
         f"<td class='num'>{f0(r['sample_n'])}</td><td class='num hm'>{f1(r['response_rate'])}</td>"
         f"<td class='num'>{f1(r['approve'])}</td><td class='num'>{f1(r['disapprove'])}</td>"
         f"<td class='num'>{f1(r['dem'])}</td><td class='num'>{f1(r['ppp'])}</td><td class='num hm'>{f1(r['none'])}</td>"
         f"<td class='hm'>{link}</td></tr>")
+
+# 조사 목록: 최근 20건만 보이고 나머지는 펼치기(JS 없이 <details>로 동작)
+POLL_SHOW = 20
+POLL_COLG = ('<colgroup><col style="width:11%"><col style="width:15%"><col class="hm" style="width:12%"><col style="width:6%">'
+             '<col style="width:8%"><col class="hm" style="width:7%"><col span="4" style="width:7%"><col class="hm" style="width:7%">'
+             '<col class="hm" style="width:6%"></colgroup>')
+_n_more = len(poll_rows) - POLL_SHOW
+POLL_MORE = ("" if _n_more <= 0 else
+             f'<details class="pmore"><summary><span class="po">나머지 {_n_more:,}건 펼치기</span><span class="pc">접기</span></summary>'
+             f'<div class="tw"><table class="t tcont">{POLL_COLG}<tbody>{"".join(poll_rows[POLL_SHOW:])}</tbody></table></div></details>'
+             "<script>addEventListener('beforeprint',function(){document.querySelectorAll('.pmore').forEach(function(d){d.open=true})})</script>")
 
 # ---------------------------------------------------------------- 차트 생성
 EV = [("2026-09-24", "2026-09-26", "추석")]
@@ -742,6 +753,13 @@ table.t td.num{{font-variant-numeric:tabular-nums;text-align:right;padding-right
 table.t td.lab{{text-align:left;white-space:normal;word-break:keep-all}}
 table.t tbody tr:hover td{{background:var(--soft)}}
 table.t tr:last-child td{{border-bottom:1.5px solid var(--ink)}}
+table.t.tcut tr:last-child td{{border-bottom:1px solid var(--line)}} .pmore{{margin-top:0}} .pmore summary{{list-style:none;cursor:pointer;display:block;text-align:center;padding:11px 0;font-size:14px;font-weight:700;color:var(--ink);border-bottom:1px solid var(--line)}}
+.pmore summary::-webkit-details-marker{{display:none}} .pmore summary:hover{{background:var(--soft)}}
+.pmore summary::after{{content:"";display:inline-block;width:7px;height:7px;margin-left:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-3px) rotate(45deg)}}
+.pmore[open] summary::after{{transform:translateY(1px) rotate(-135deg)}}
+.pmore .pc{{display:none}} .pmore[open] .po{{display:none}} .pmore[open] .pc{{display:inline}}
+.pmore .tw{{margin-top:0}}
+@media print{{.pmore summary{{display:none}}}}
 table.t.mt td.lab{{font-weight:600}} table.t td.cn{{text-align:center}} .nb{{display:inline-block;min-width:3.4em;text-align:right;font-variant-numeric:tabular-nums}} table.t td.big{{font-weight:800;color:var(--coral-d)}}
 .evl{{list-style:none;margin:14px 0 0;padding:12px 0 0;border-top:1px dashed var(--line2);display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--body)}}
 .evl li{{display:flex;align-items:baseline;gap:7px;min-width:0}}
@@ -763,7 +781,7 @@ footer .logo{{width:92px;height:auto}}
   .gs{{grid-auto-flow:row;grid-template-columns:repeat(8,1fr);overflow:visible}} .gc{{padding:7px 0 6px}} .gc b{{font-size:12px;letter-spacing:-.02em}} .gc span{{font-size:10px}}
   .cv-d{{display:none}} .cv-m{{display:block}}
   table.t{{font-size:12px}} table.t .hm{{display:none}}
-  table.t td.num{{padding-right:6px}}
+  table.t td.num{{padding-right:6px}} table.t td.dt{{white-space:normal;line-height:1.35}}
   .method dl{{grid-template-columns:1fr;gap:4px 0}} .method dd{{margin-bottom:8px}}
 }}
 @media(prefers-reduced-motion:reduce){{html{{scroll-behavior:auto}}}}
@@ -851,10 +869,10 @@ footer .logo{{width:92px;height:auto}}
   <section class="card">
     <h2 class="ctitle">분석 대상 조사 {n_polls:,}건</h2>
     <div class="csub">단위: %, 명 · 최근 조사 순 · 빈칸은 해당 문항이 없거나 보도되지 않은 경우</div>
-    <div class="tw"><table class="t">
-      <colgroup><col style="width:11%"><col style="width:15%"><col class="hm" style="width:12%"><col style="width:6%"><col style="width:8%"><col class="hm" style="width:7%"><col span="4" style="width:7%"><col class="hm" style="width:7%"><col class="hm" style="width:6%"></colgroup>
+    <div class="tw"><table class="t{' tcut' if POLL_MORE else ''}">
+      {POLL_COLG}
       <thead><tr><th>조사기간</th><th>조사기관</th><th class="hm">조사의뢰자</th><th>방법</th><th>표본</th><th class="hm">응답률</th><th>긍정</th><th>부정</th><th>민주</th><th>국힘</th><th class="hm">무당층</th><th class="hm">출처</th></tr></thead>
-      <tbody>{''.join(poll_rows)}</tbody></table></div>
+      <tbody>{''.join(poll_rows[:POLL_SHOW])}</tbody></table></div>{POLL_MORE}
     <div class="foot">※ 자세한 내용은 중앙선거여론조사심의위원회 홈페이지 참조. 출처는 수치를 옮긴 보도 또는 조사기관 공개 자료</div>
   </section>
 
